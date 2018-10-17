@@ -34,11 +34,7 @@ import org.elasticsearch.tasks.TaskId;
 import org.elasticsearch.tasks.TaskInfo;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 import static java.lang.Math.min;
 import static java.util.Collections.emptyList;
@@ -219,10 +215,11 @@ public class BulkByScrollTask extends CancellableTask {
         private final String reasonCancelled;
         private final TimeValue throttledUntil;
         private final List<StatusOrException> sliceStatuses;
+        private final List<String> errors;
 
         public Status(Integer sliceId, long total, long updated, long created, long deleted, int batches, long versionConflicts, long noops,
                 long bulkRetries, long searchRetries, TimeValue throttled, float requestsPerSecond, @Nullable String reasonCancelled,
-                TimeValue throttledUntil) {
+                TimeValue throttledUntil, List<String> errors) {
             this.sliceId = sliceId == null ? null : checkPositive(sliceId, "sliceId");
             this.total = checkPositive(total, "total");
             this.updated = checkPositive(updated, "updated");
@@ -238,6 +235,7 @@ public class BulkByScrollTask extends CancellableTask {
             this.reasonCancelled = reasonCancelled;
             this.throttledUntil = throttledUntil;
             this.sliceStatuses = emptyList();
+            this.errors = errors;
         }
 
         /**
@@ -300,6 +298,7 @@ public class BulkByScrollTask extends CancellableTask {
             requestsPerSecond = mergedRequestsPerSecond;
             throttledUntil = timeValueNanos(mergedThrottledUntil == Long.MAX_VALUE ? 0 : mergedThrottledUntil);
             this.sliceStatuses = sliceStatuses;
+            this.errors = new LinkedList<>();
         }
 
         public Status(StreamInput in) throws IOException {
@@ -326,6 +325,7 @@ public class BulkByScrollTask extends CancellableTask {
             } else {
                 sliceStatuses = emptyList();
             }
+            errors = new LinkedList<>();
         }
 
         @Override
@@ -401,6 +401,14 @@ public class BulkByScrollTask extends CancellableTask {
                     } else {
                         slice.toXContent(builder, params);
                     }
+                }
+                builder.endArray();
+            }
+
+            if(false == errors.isEmpty()){
+                builder.startArray("errorIds");
+                for (String ids : errors) {
+                    builder.value(ids);
                 }
                 builder.endArray();
             }

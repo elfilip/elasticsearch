@@ -26,6 +26,8 @@ import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
 import org.elasticsearch.threadpool.ThreadPool;
 
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -71,7 +73,7 @@ public class WorkerBulkByScrollTaskState implements SuccessfullyProcessed {
     private final AtomicLong bulkRetries = new AtomicLong(0);
     private final AtomicLong searchRetries = new AtomicLong(0);
     private final AtomicLong throttledNanos = new AtomicLong();
-
+    private final List<String> errors = new CopyOnWriteArrayList<>();
     /**
      * The number of requests per second to which to throttle the request that this task represents. The other variables are all AtomicXXX
      * style variables but there isn't an AtomicFloat so we just use a volatile.
@@ -104,7 +106,8 @@ public class WorkerBulkByScrollTaskState implements SuccessfullyProcessed {
             timeValueNanos(throttledNanos.get()),
             getRequestsPerSecond(),
             task.getReasonCancelled(),
-            throttledUntil());
+            throttledUntil(),
+            errors);
     }
 
     public void handleCancel() {
@@ -140,6 +143,14 @@ public class WorkerBulkByScrollTaskState implements SuccessfullyProcessed {
 
     public void countUpdated() {
         updated.incrementAndGet();
+    }
+
+    public List<String> getErrors() {
+        return errors;
+    }
+
+    public void addError(String errorId){
+        errors.add(errorId);
     }
 
     @Override

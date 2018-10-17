@@ -403,8 +403,9 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
             addDestinationIndices(destinationIndicesThisBatch);
 
             if (false == failures.isEmpty()) {
-                refreshAndFinish(unmodifiableList(failures), emptyList(), false);
-                return;
+                //failures.forEach(err-> worker.addError(err.getId()));
+                failures.clear(); //refreshAndFinish(unmodifiableList(failures), emptyList(), false);
+                //return;
             }
 
             if (mainRequest.getSize() != SIZE_ALL_MATCHES && worker.getSuccessfullyProcessed() >= mainRequest.getSize()) {

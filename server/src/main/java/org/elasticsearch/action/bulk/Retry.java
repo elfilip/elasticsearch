@@ -20,11 +20,16 @@ package org.elasticsearch.action.bulk;
 
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.DocWriteRequest;
+import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.support.PlainActionFuture;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
+import org.elasticsearch.index.conflict.Event;
+import org.elasticsearch.index.conflict.FailedEvent;
+import org.elasticsearch.index.conflict.MappingExceptionProcessor;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.threadpool.Scheduler;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -32,6 +37,7 @@ import org.elasticsearch.threadpool.ThreadPool;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ScheduledFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -42,6 +48,7 @@ import java.util.function.Predicate;
 public class Retry {
     private final BackoffPolicy backoffPolicy;
     private final Scheduler scheduler;
+
 
     public Retry(BackoffPolicy backoffPolicy, Scheduler scheduler) {
         this.backoffPolicy = backoffPolicy;
@@ -93,6 +100,7 @@ public class Retry {
         // volatile as we're called from a scheduled thread
         private volatile BulkRequest currentBulkRequest;
         private volatile ScheduledFuture<?> scheduledRequestFuture;
+        private MappingExceptionProcessor mappingExceptionProcessor = new MappingExceptionProcessor();
 
         RetryHandler(BackoffPolicy backoffPolicy, BiConsumer<BulkRequest, ActionListener<BulkResponse>> consumer,
                      ActionListener<BulkResponse> listener, Settings settings, Scheduler scheduler) {
@@ -114,12 +122,31 @@ public class Retry {
             } else {
                 if (canRetry(bulkItemResponses)) {
                     addResponses(bulkItemResponses, (r -> !r.isFailed()));
-                    retry(createBulkRequestForRetry(bulkItemResponses));
+                    retry(createBulkRequestForConflicts(bulkItemResponses));
                 } else {
                     addResponses(bulkItemResponses, (r -> true));
                     finishHim();
                 }
             }
+        }
+
+        private BulkRequest createBulkRequestForConflicts(BulkResponse bulkItemResponses) {
+            BulkRequest requestToReissue = new BulkRequest();
+            int index = 0;
+            for (BulkItemResponse bulkItemResponse : bulkItemResponses.getItems()) {
+                if (bulkItemResponse.isFailed() && bulkItemResponse.getFailure().getStatus().equals(RestStatus.BAD_REQUEST)) {
+                    Event event = new Event();
+                    IndexRequest req = (IndexRequest) currentBulkRequest.requests.get(index);
+                    event.setFieldGroups(req.sourceAsMap());
+                    event.setCustomerID(Integer.parseInt((String)event.getFieldGroups().get("_custid")));
+                    FailedEvent fe = new FailedEvent(event,  bulkItemResponse.getFailure().getMessage());
+                    Event fixedEvent =  mappingExceptionProcessor.process(fe);
+                    req.source(fixedEvent.getFieldGroups());
+                    requestToReissue.add(req);
+                }
+                index++;
+            }
+            return requestToReissue;
         }
 
         @Override
@@ -158,7 +185,7 @@ public class Retry {
             for (BulkItemResponse bulkItemResponse : bulkItemResponses) {
                 if (bulkItemResponse.isFailed()) {
                     final RestStatus status = bulkItemResponse.status();
-                    if (status != RETRY_STATUS) {
+                    if (status != RETRY_STATUS && status != RestStatus.BAD_REQUEST) {
                         return false;
                     }
                 }

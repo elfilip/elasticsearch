@@ -25,10 +25,7 @@ import org.elasticsearch.action.support.ActiveShardCount;
 import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.rest.BaseRestHandler;
-import org.elasticsearch.rest.BytesRestResponse;
-import org.elasticsearch.rest.RestRequest;
-import org.elasticsearch.rest.RestStatus;
+import org.elasticsearch.rest.*;
 import org.elasticsearch.tasks.LoggingTaskListener;
 import org.elasticsearch.tasks.Task;
 
@@ -59,7 +56,9 @@ public abstract class AbstractBaseReindexRestHandler<
             params.put(BulkByScrollTask.Status.INCLUDE_CREATED, Boolean.toString(includeCreated));
             params.put(BulkByScrollTask.Status.INCLUDE_UPDATED, Boolean.toString(includeUpdated));
 
-            return channel -> client.executeLocally(action, internal, new BulkIndexByScrollResponseContentListener(channel, params));
+            return (RestChannel channel) -> {
+                client.executeLocally(action, internal, new BulkIndexByScrollResponseContentListener(channel, params));
+            };
         } else {
             internal.setShouldStoreResult(true);
         }
