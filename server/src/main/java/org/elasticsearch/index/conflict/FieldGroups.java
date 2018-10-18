@@ -25,7 +25,6 @@ public enum FieldGroups {
   PHP("php"),
   WINDOWS("windows"),
   CUSTOM("derived")
-
   ;
 
   public final String name;

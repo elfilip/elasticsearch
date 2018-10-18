@@ -1,7 +1,9 @@
 package org.elasticsearch.index.conflict;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -53,12 +55,15 @@ public class RemoveJsonFieldsMappingResolver implements MappingConflictResolver 
   }
 
   private Event resolve(Event originalEvent) {
-    if(!originalEvent.containsFieldGroup(FieldGroups.JSON.name)) {
-      MappingConflictUtils.removeAllButSyslogFields(originalEvent);
-    } else {
-      originalEvent.removeFieldGroup(FieldGroups.JSON.name);
+    if(!originalEvent.containsFieldGroup(originalEvent.getCustomerID())){
+        MappingConflictUtils.removeAllButSyslogFields(originalEvent);
+    }else{
+        originalEvent.removeFieldGroup(originalEvent.getCustomerID());
     }
-
+    MappingConflictUtils.removeFieldFromFacets(originalEvent, FieldGroups.JSON.getName());
     return originalEvent;
   }
+
+
 }
+

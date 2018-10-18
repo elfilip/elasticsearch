@@ -20,7 +20,6 @@ package org.elasticsearch.action.bulk;
 
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.support.PlainActionFuture;
 import org.elasticsearch.common.logging.Loggers;
@@ -37,7 +36,6 @@ import org.elasticsearch.threadpool.ThreadPool;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ScheduledFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -121,32 +119,13 @@ public class Retry {
                 finishHim();
             } else {
                 if (canRetry(bulkItemResponses)) {
-                    addResponses(bulkItemResponses, (r -> !r.isFailed()));
-                    retry(createBulkRequestForConflicts(bulkItemResponses));
+                    addResponses(bulkItemResponses, (r -> !r.isFailed() || (r.getFailure() != null && r.getFailure().getStatus().equals(RestStatus.BAD_REQUEST))));
+                    retry(createBulkRequestForRetry(bulkItemResponses));
                 } else {
                     addResponses(bulkItemResponses, (r -> true));
                     finishHim();
                 }
             }
-        }
-
-        private BulkRequest createBulkRequestForConflicts(BulkResponse bulkItemResponses) {
-            BulkRequest requestToReissue = new BulkRequest();
-            int index = 0;
-            for (BulkItemResponse bulkItemResponse : bulkItemResponses.getItems()) {
-                if (bulkItemResponse.isFailed() && bulkItemResponse.getFailure().getStatus().equals(RestStatus.BAD_REQUEST)) {
-                    Event event = new Event();
-                    IndexRequest req = (IndexRequest) currentBulkRequest.requests.get(index);
-                    event.setFieldGroups(req.sourceAsMap());
-                    event.setCustomerID(Integer.parseInt((String)event.getFieldGroups().get("_custid")));
-                    FailedEvent fe = new FailedEvent(event,  bulkItemResponse.getFailure().getMessage());
-                    Event fixedEvent =  mappingExceptionProcessor.process(fe);
-                    req.source(fixedEvent.getFieldGroups());
-                    requestToReissue.add(req);
-                }
-                index++;
-            }
-            return requestToReissue;
         }
 
         @Override
@@ -171,11 +150,28 @@ public class Retry {
             int index = 0;
             for (BulkItemResponse bulkItemResponse : bulkItemResponses.getItems()) {
                 if (bulkItemResponse.isFailed()) {
-                    requestToReissue.add(currentBulkRequest.requests().get(index));
+                    if(bulkItemResponse.getFailure().getStatus().equals(RestStatus.BAD_REQUEST)){
+                        logger.debug("Mapping conflict: " + bulkItemResponse.getId() +
+                            ", Message"+ bulkItemResponse.getFailureMessage());
+                        IndexRequest req = (IndexRequest) currentBulkRequest.requests.get(index);
+                        fixConflictInRequest(req, bulkItemResponse.getFailure().getMessage());
+                        requestToReissue.add(req);
+                    }else{
+                        requestToReissue.add(currentBulkRequest.requests().get(index));
+                    }
                 }
                 index++;
             }
             return requestToReissue;
+        }
+
+        public void fixConflictInRequest(IndexRequest req, String failure){
+            Event event = new Event();
+            event.setFieldGroups(req.sourceAsMap());
+            event.setCustomerID(((Integer)event.getFieldGroups().get("_custid")).toString());
+            FailedEvent fe = new FailedEvent(event, failure);
+            Event fixedEvent =  mappingExceptionProcessor.process(fe);
+            req.source(fixedEvent.getFieldGroups());
         }
 
         private boolean canRetry(BulkResponse bulkItemResponses) {

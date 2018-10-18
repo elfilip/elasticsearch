@@ -1,0 +1,56 @@
+{
+    "mapping_conflicts" : [
+        {
+            "notification": "Field originally sent as one type and later sent as new type.",
+            "regexes": ["failed to parse \\[([^\\]]*)\\]"],
+            "type": "REMOVE_SINGLE_FIELD",
+            "field_is_fully_qualified" : true
+        },
+        {
+            "notification": "Field originally sent as an object and later sent as a concrete value.",
+            "regexes": ["object mapping for \\[(?:[^\\]]*)\\] tried to parse field \\[([^\\]]*)\\] as object, but found a concrete value"],
+            "type": "REMOVE_SINGLE_FIELD",
+            "field_is_fully_qualified" : false,
+            "field_group_containing_field" : "json",
+            "comment" : "The extracted field is not fully qualified, so we must search for the field within the json field group"
+        },
+        {
+            "notification": "Field originally sent as a concrete value and later sent as an object.",
+            "regexes": ["object mapping (?:for )?\\[(?:[^\\]]*)\\] tried to parse field \\[([^\\]]*)\\] as object, but got EOF, has a concrete value been provided to it?"],
+            "type": "REMOVE_SINGLE_FIELD",
+            "field_is_fully_qualified" : false,
+            "field_group_containing_field" : "json",
+            "comment" : "The extracted field is not fully qualified, so we must search for the field within the json field group"
+        },
+        {
+            "notification": "Field originally sent as one type and later sent as a new type, i.e. originally sent as an object and later as an array.",
+            "regexes": ["object mapping \\[([^\\]]*)\\] trying to serialize a value with no field associated with it"],
+            "type": "REMOVE_SINGLE_FIELD",
+            "field_is_fully_qualified" : false,
+            "field_group_containing_field" : "json",
+            "comment" : "The extracted field is not fully qualified, so we must search for the field within the json field group"
+        },
+        {
+            "notification": "Field originally sent an object and later as a concrete value or array.",
+            "regexes": ["object mapping for \\[(?:[^\\]]*)\\] with array for \\[([^\\]]*)\\] tried to parse as array, but got EOF, is there a mismatch in types for the same field?"],
+            "type": "REMOVE_SINGLE_FIELD",
+            "field_is_fully_qualified" : false,
+            "field_group_containing_field" : "json",
+            "comment" : "The extracted field is not fully qualified, so we must search for the field within the json field group"
+        },
+        {
+            "notification": "Field originally sent as an array and later something else, i.e. a concrete value or object.",
+            "regexes": ["object mapping for \\[(?:[^\\]]*)\\] with array for \\[([^\\]]*)\\] tried to parse as array, but got EOF, is there a mismatch in types for the same field?"],
+            "type": "REMOVE_SINGLE_FIELD",
+            "field_is_fully_qualified" : false,
+            "field_group_containing_field" : "json",
+            "comment" : "The extracted field is not fully qualified, so we must search for the field within the json field group"
+        },
+        {
+            "notification": "Field originally sent as an object and later as a concrete value or an array.",
+            "regexes": ["object mapping for \\[(?:[^\\]]*)\\] tried to parse as object, but got EOF, has a concrete value been provided to it?"],
+            "type": "REMOVE_JSON_FIELDS",
+            "comment" : "For ES 1.4 and below: this particularly helpful ES message doesn't even mention what field caused the error so we just remove all json fields."
+        }
+    ]
+}

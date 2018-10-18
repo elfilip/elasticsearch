@@ -3,20 +3,21 @@ package org.elasticsearch.index.conflict;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.common.xcontent.XContentType;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class MappingConflictUtils {
 
   // constants for loading the mapping conflicts file
-  private final static String MAPPING_CONFLICT_FILE = "mapping-conflicts.json";
+  private final static String MAPPING_CONFLICT_FILE = "config/mapping-conflicts.json";
   private final static String MAPPING_CONFLICTS_FIELD = "mapping_conflicts";
   private final static String CONFLICT_TYPE_FIELD = "type";
   private final static String REGEXES_FIELD = "regexes";
   private final static String NOTIFICATION_FIELD = "notification";
   private final static String FIELD_IS_FULLY_QUALIFIED = "field_is_fully_qualified";
   private final static String FIELD_GROUP_CONTAINING_FIELD = "field_group_containing_field";
+  private final static List<String> IGNORE_GROUPS = Arrays.asList(new String[]{"tag", "logtype", "LogglyNotifications",
+      "_fnames","_rects","_recseq","_refts","_idxts","_custid","_senderip","_logmsg","_unparsed",
+      "_unparsedmsg","_logsize","_sample","_parser", "syslog"});
 
   // Different types of mapping conflict resolvers go here, i.e. mapping conflicts containing no fields or mapping conflicts
   // containing a type and a field, resolves that rename fields, etc.
@@ -33,9 +34,8 @@ public class MappingConflictUtils {
   @SuppressWarnings("unchecked")
   public static ArrayList<MappingConflictResolver> initMappingConflictResolvers() {
     try {
-     // List<Map<String,Object>> mappingConflicts = (List<Map<String, Object>>) JsonUtil.createMapFromFile(MAPPING_CONFLICT_FILE).get(MAPPING_CONFLICTS_FIELD);
         List<Map<String, Object>> mappingConflicts = (List<Map<String, Object>>) XContentHelper.convertToMap(XContentType.JSON.xContent(),
-            Thread.currentThread().getContextClassLoader().getResourceAsStream("config/mapping-conflicts.json"), true).get(MAPPING_CONFLICTS_FIELD);
+            Thread.currentThread().getContextClassLoader().getResourceAsStream(MAPPING_CONFLICT_FILE), true).get(MAPPING_CONFLICTS_FIELD);
       ArrayList<MappingConflictResolver> resolvers = new ArrayList<>(mappingConflicts.size());
       for(Map<String,Object> mappingConflict : mappingConflicts) {
         MappingConflictResolver resolver;
@@ -100,9 +100,59 @@ public class MappingConflictUtils {
   }
 
   public static void removeAllButSyslogFields(Event originalEvent) {
-    // just save the syslog parsed out fields and clear everythign else
-    Map<String, Object> syslog = originalEvent.getFieldGroup(FieldGroups.SYSLOG.name);
-    originalEvent.clearFieldGroups();
-    originalEvent.setFieldGroup(FieldGroups.SYSLOG.name, syslog);
+
+    Map<String, Object> fixedGroups = new HashMap<>();
+    for (String ignored : IGNORE_GROUPS) {
+        Object value = originalEvent.getFieldGroups().get(ignored);
+        if (value != null) {
+            fixedGroups.put(ignored, value);
+        }
+    }
+
+    originalEvent.setFieldGroups(fixedGroups);
+    removeAllButSyslogFromFacets(originalEvent);
   }
+
+    public static void removeAllButSyslogFromFacets(Event originalEvent) {
+        removeFieldFromFacetsCond(originalEvent, FieldGroups.SYSLOG.name, false);
+    }
+
+    public static void removeFieldFromFacets(Event originalEvent, List<String> path) {
+        String name = createStringFromList(path);
+        removeFieldFromFacetsCond(originalEvent, name, true);
+    }
+
+    public static void removeFieldFromFacets(Event originalEvent, String name){
+      removeFieldFromFacetsCond(originalEvent, name, true);
+    }
+
+
+    private static void removeFieldFromFacetsCond(Event originalEvent, String name, boolean condition) {
+        Map<String, Object> fnames = originalEvent.getFieldGroup("_fnames");
+        if(fnames != null){
+            for (Map.Entry<String, Object> entry : fnames.entrySet()) {
+                List<String> facet = (List<String>) entry.getValue();
+                if (!(facet instanceof List)) {
+                    continue;
+                }
+                Iterator it = ((List) facet).iterator();
+                while (it.hasNext()) {
+                    if (((String)it.next()).startsWith(name) == condition) {
+                        it.remove();
+                    }
+                }
+
+            }
+        }
+
+    }
+
+    private static String createStringFromList(List<String> path) {
+        StringBuilder sb = new StringBuilder();
+        for (String name : path) {
+            sb.append(name).append(".");
+        }
+        sb.setLength(sb.length()-1);
+        return sb.toString();
+    }
 }

@@ -74,6 +74,7 @@ public class WorkerBulkByScrollTaskState implements SuccessfullyProcessed {
     private final AtomicLong searchRetries = new AtomicLong(0);
     private final AtomicLong throttledNanos = new AtomicLong();
     private final List<String> errors = new CopyOnWriteArrayList<>();
+    private final AtomicLong conflicts = new AtomicLong(0);
     /**
      * The number of requests per second to which to throttle the request that this task represents. The other variables are all AtomicXXX
      * style variables but there isn't an AtomicFloat so we just use a volatile.
@@ -107,7 +108,8 @@ public class WorkerBulkByScrollTaskState implements SuccessfullyProcessed {
             getRequestsPerSecond(),
             task.getReasonCancelled(),
             throttledUntil(),
-            errors);
+            errors,
+            conflicts.get());
     }
 
     public void handleCancel() {
@@ -143,6 +145,14 @@ public class WorkerBulkByScrollTaskState implements SuccessfullyProcessed {
 
     public void countUpdated() {
         updated.incrementAndGet();
+    }
+
+    public void countConflicts() {
+        conflicts.incrementAndGet();
+    }
+
+    public long getConflicts() {
+        return conflicts.get();
     }
 
     public List<String> getErrors() {

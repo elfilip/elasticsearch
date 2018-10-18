@@ -9,11 +9,6 @@ public class MappingExceptionProcessor implements FailedEventProcessor {
   @Override
   public Event process(FailedEvent fe) {
     if (fe.getFailureReason().contains("MapperParsingException")) {
-     /* if(Flag.LogMappingConflictException.isset()) {
-        // Log mapping conflict exceptions for offline analysis.
-        //LOG.info("Received the following MapperParsingException: "+fe.getFailureReason()+". Original event received was: "+fe.getOriginalEvent());
-      }*/
-
       return filterMappingErrors(fe.getOriginalEvent(), fe.getFailureReason());
     }
 
@@ -30,11 +25,6 @@ public class MappingExceptionProcessor implements FailedEventProcessor {
     }
 
     if(resolvedEvent == null) {
-      // none of the resolvers were able to fix the event
-    /*  if(Flag.LogUnknownMappingConflictException.isset()) {
-        //LOG.warn("Unable to resolve the mapping conflict for the following event: " + originalEvent + ". Failure reason for" +
-        //    "mapping conflict was: " + failureReason);
-      }*/
       MappingConflictUtils.removeAllButSyslogFields(originalEvent);
     }
 

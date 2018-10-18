@@ -1,0 +1,76 @@
+{
+  "_rects":1517601892723,
+  "_recseq":137368946927239242,
+  "_refts":1517601890687,
+  "_idxts":1517601901550,
+  "_custid":12345,
+  "_senderip":1760550948,
+  "_logmsg":"{\"@timestamp\":\"2018-02-02T20:04:50.687Z\"}",
+  "_unparsed":false,
+  "_unparsedmsg":null,
+  "_logsize":3898,
+  "_sample":978570331,
+  "_parser":{
+    "MatchedRules":[
+      "JsonParse_Json1"
+    ],
+    "timestampSource":"json",
+    "Syslog_Event_EndPos":"json"
+  },
+  "syslog" : {
+    "appName" : "aaa"
+  },
+  "http":{
+    "clientHost":"1.1.1.1",
+    "contentType":"text/json"
+  },
+  "tag":[
+    "prod"
+  ],
+  "logtype":[
+    "json"
+  ],
+  "12345":{
+    "json":{
+      "field1":1,
+      "field2":2,
+      "inner1":{
+        "latitude":1.0,
+        "country_code":"XX",
+        "location":[
+          1.0,
+          1.0
+        ],
+        "longitude":-1.0
+      },
+      "field3": ["aaa", "bbb"]
+    }
+  },
+  "LogglyNotifications":[
+    {
+      "type":"ScrubbedValues",
+      "message":"3 key/value pairs were not indexed due to invalid values (i.e value equals \" \", \"-\", \"_\"). The first 2 affected kv pairs were: [json.x1, json.x2:-]"
+    }
+  ],
+  "_fnames":{
+    "facet":[
+      "LogglyNotifications.type",
+      "http.clientHost",
+      "http.contentType",
+      "json.field1",
+      "json.field2",
+      "json.inner1.latitude",
+      "json.inner1.country_code",
+      "json.inner1.location",
+      "json.inner1.longitude",
+      "json.field3",
+      "logtype",
+      "tag",
+      "syslog.appName"
+    ],
+    "numeric":[
+      "json.field1",
+      "json.field2"
+    ]
+  }
+}

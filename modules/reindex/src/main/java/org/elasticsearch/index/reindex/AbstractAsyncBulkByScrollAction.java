@@ -49,23 +49,14 @@ import org.elasticsearch.index.mapper.SourceFieldMapper;
 import org.elasticsearch.index.mapper.TypeFieldMapper;
 import org.elasticsearch.index.mapper.VersionFieldMapper;
 import org.elasticsearch.index.reindex.ScrollableHitSource.SearchFailure;
+import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.script.ExecutableScript;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.threadpool.ThreadPool;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
@@ -403,9 +394,19 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
             addDestinationIndices(destinationIndicesThisBatch);
 
             if (false == failures.isEmpty()) {
-                //failures.forEach(err-> worker.addError(err.getId()));
-                failures.clear(); //refreshAndFinish(unmodifiableList(failures), emptyList(), false);
-                //return;
+                Iterator<Failure> it = failures.iterator();
+                while (it.hasNext()) {
+                    Failure failure = it.next();
+                    if(failure.getStatus().equals(RestStatus.BAD_REQUEST)){
+                        worker.countConflicts();
+                        worker.addError(failure.getId());
+                        it.remove();
+                    }
+                }
+                if(!failures.isEmpty()){
+                    refreshAndFinish(unmodifiableList(failures), emptyList(), false);
+                    return;
+                }
             }
 
             if (mainRequest.getSize() != SIZE_ALL_MATCHES && worker.getSuccessfullyProcessed() >= mainRequest.getSize()) {

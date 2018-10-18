@@ -1,8 +1,6 @@
 package org.elasticsearch.index.conflict;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -57,7 +55,7 @@ public class RemoveSingleFieldMappingResolver implements MappingConflictResolver
    * @return
    */
   public Event resolveMappingConflict(Event originalEvent, String mappingExceptionMessage) {
-    String fieldCausingConflict = getConflictingFieldFromMessage(originalEvent.getCustomerID(), mappingExceptionMessage);
+    String fieldCausingConflict = getConflictingFieldFromMessage(mappingExceptionMessage);
     return fieldCausingConflict == null ? null : resolve(originalEvent, fieldCausingConflict);
   }
 
@@ -76,17 +74,22 @@ public class RemoveSingleFieldMappingResolver implements MappingConflictResolver
     if(fieldIsFullyQualified) {
       removeFullyQualifiedField(originalEvent, fieldCausingConflict);
     } else {
-      if(!originalEvent.containsFieldGroup(this.fieldGroupToSearch)) {
+      if(!originalEvent.containsFieldGroup(originalEvent.getCustomerID())) {
         // we have an unqualified field from ES and the field group that we should search for the field in is missing, so we remove all fields
         // this shouldn't ever really happen but just in case we do it so that the event can still be successfully indexed without another mapping conflict
         MappingConflictUtils.removeAllButSyslogFields(originalEvent);
       } else {
           Map<String, Object> fieldGroup;
           if(fieldGroupToSearch.equals("json")){
-
+              fieldGroup = originalEvent.getFieldGroup(originalEvent.customerID);
+              if(fieldGroup == null){
+                  MappingConflictUtils.removeAllButSyslogFields(originalEvent);
+              }
+          }else{
+              fieldGroup = originalEvent.getFieldGroup(this.fieldGroupToSearch);
           }
-        Map<String, Object> fieldGroup = originalEvent.getFieldGroup(this.fieldGroupToSearch);
-        Object removedValue = searchAndRemoveField(fieldGroup, fieldCausingConflict);
+
+        Object removedValue = searchAndRemoveField(originalEvent, fieldGroup, fieldCausingConflict, new LinkedList<>());
         if(removedValue != null) {
           return originalEvent;
         }
@@ -111,6 +114,10 @@ public class RemoveSingleFieldMappingResolver implements MappingConflictResolver
   private void removeFullyQualifiedField(Event originalEvent, String fieldCausingConflict) {
     Object removedField = originalEvent.removeField(fieldCausingConflict);
     if (removedField != null) {
+      int firstDot = fieldCausingConflict.indexOf(".");
+      if(firstDot != -1){
+          MappingConflictUtils.removeFieldFromFacets(originalEvent, fieldCausingConflict.substring(firstDot + 1, fieldCausingConflict.length()));
+      }
       return;
     } else {
       // we didn't find the event to remove, try to remove the field group causing the issues
@@ -134,18 +141,26 @@ public class RemoveSingleFieldMappingResolver implements MappingConflictResolver
    * @return
    */
   @SuppressWarnings("unchecked")
-  private Object searchAndRemoveField(Map<String, Object> fieldGroup, String fieldCausingConflict) {
-    for(Map.Entry<String, Object> field : fieldGroup.entrySet()) {
-      if(field.getKey().equals(fieldCausingConflict)) {
-        return fieldGroup.remove(field.getKey());
-      }
+  private Object searchAndRemoveField(Event originalEvent, Map<String, Object> fieldGroup, String fieldCausingConflict, List<String> path) {
+    if (fieldGroup == null) {
+        return null;
+    }
+
+    for (Map.Entry<String, Object> field : fieldGroup.entrySet()) {
+        if (field.getKey().equals(fieldCausingConflict)) {
+            path.add(field.getKey());
+            MappingConflictUtils.removeFieldFromFacets(originalEvent, path);
+            return fieldGroup.remove(field.getKey());
+        }
     }
 
     // if we've made it this far, we haven't removed any fields yet. We must recurse now.
     for(Map.Entry<String, Object> field : fieldGroup.entrySet()) {
       Object recursedRemovedField = null;
       if(field.getValue() instanceof Map) {
-        recursedRemovedField = searchAndRemoveField((Map<String, Object>) field.getValue(), fieldCausingConflict);
+        path.add(field.getKey());
+        recursedRemovedField = searchAndRemoveField(originalEvent, (Map<String, Object>) field.getValue(), fieldCausingConflict, path);
+        path.remove(path.size()-1);
       }
       if(recursedRemovedField != null) {
         // we managed to remove a field so break out of the recursion
@@ -161,7 +176,7 @@ public class RemoveSingleFieldMappingResolver implements MappingConflictResolver
    * @param exceptionMessage
    * @return null if no field could be determined
    */
-  private String getConflictingFieldFromMessage(int cid, String exceptionMessage) {
+  private String getConflictingFieldFromMessage(String exceptionMessage) {
     String field = null;
     for(Pattern p : patterns) {
       Matcher matcher = p.matcher(exceptionMessage);

@@ -216,10 +216,11 @@ public class BulkByScrollTask extends CancellableTask {
         private final TimeValue throttledUntil;
         private final List<StatusOrException> sliceStatuses;
         private final List<String> errors;
+        private final long conflicts;
 
         public Status(Integer sliceId, long total, long updated, long created, long deleted, int batches, long versionConflicts, long noops,
                 long bulkRetries, long searchRetries, TimeValue throttled, float requestsPerSecond, @Nullable String reasonCancelled,
-                TimeValue throttledUntil, List<String> errors) {
+                TimeValue throttledUntil, List<String> errors, long conflicts) {
             this.sliceId = sliceId == null ? null : checkPositive(sliceId, "sliceId");
             this.total = checkPositive(total, "total");
             this.updated = checkPositive(updated, "updated");
@@ -236,6 +237,13 @@ public class BulkByScrollTask extends CancellableTask {
             this.throttledUntil = throttledUntil;
             this.sliceStatuses = emptyList();
             this.errors = errors;
+            this.conflicts = conflicts;
+        }
+
+        public Status(Integer sliceId, long total, long updated, long created, long deleted, int batches, long versionConflicts, long noops,
+                      long bulkRetries, long searchRetries, TimeValue throttled, float requestsPerSecond, @Nullable String reasonCancelled,
+                      TimeValue throttledUntil){
+            this(sliceId, total, updated, created, deleted, batches, versionConflicts, noops, bulkRetries, searchRetries, throttled, requestsPerSecond, reasonCancelled, throttledUntil, new LinkedList<>(), 0L);
         }
 
         /**
@@ -261,6 +269,8 @@ public class BulkByScrollTask extends CancellableTask {
             long mergedThrottled = 0;
             float mergedRequestsPerSecond = 0;
             long mergedThrottledUntil = Long.MAX_VALUE;
+            long mergedConflicts = 0;
+            errors = new LinkedList<>();
 
             for (StatusOrException slice : sliceStatuses) {
                 if (slice == null) {
@@ -283,6 +293,8 @@ public class BulkByScrollTask extends CancellableTask {
                 mergedThrottled += slice.status.getThrottled().nanos();
                 mergedRequestsPerSecond += slice.status.getRequestsPerSecond();
                 mergedThrottledUntil = min(mergedThrottledUntil, slice.status.getThrottledUntil().nanos());
+                mergedConflicts +=slice.status.getConflicts();
+                errors.addAll(slice.status.getErrors());
             }
 
             total = mergedTotal;
@@ -298,7 +310,7 @@ public class BulkByScrollTask extends CancellableTask {
             requestsPerSecond = mergedRequestsPerSecond;
             throttledUntil = timeValueNanos(mergedThrottledUntil == Long.MAX_VALUE ? 0 : mergedThrottledUntil);
             this.sliceStatuses = sliceStatuses;
-            this.errors = new LinkedList<>();
+            conflicts = mergedConflicts;
         }
 
         public Status(StreamInput in) throws IOException {
@@ -326,6 +338,7 @@ public class BulkByScrollTask extends CancellableTask {
                 sliceStatuses = emptyList();
             }
             errors = new LinkedList<>();
+            conflicts = 0;
         }
 
         @Override
@@ -381,6 +394,7 @@ public class BulkByScrollTask extends CancellableTask {
             builder.field("deleted", deleted);
             builder.field("batches", batches);
             builder.field("version_conflicts", versionConflicts);
+            builder.field("conflicts", conflicts);
             builder.field("noops", noops);
             builder.startObject("retries"); {
                 builder.field("bulk", bulkRetries);
@@ -469,6 +483,14 @@ public class BulkByScrollTask extends CancellableTask {
         @Override
         public long getDeleted() {
             return deleted;
+        }
+
+        public long getConflicts() {
+            return conflicts;
+        }
+
+        public List<String> getErrors() {
+            return errors;
         }
 
         /**
