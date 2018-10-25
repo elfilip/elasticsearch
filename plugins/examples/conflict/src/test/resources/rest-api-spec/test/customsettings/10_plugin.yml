@@ -1,4 +1,4 @@
-"Test that the custom-settings plugin is loaded in Elasticsearch":
+"Test that the conflict plugin is loaded in Elasticsearch":
 
   # Use the Cat Plugins API to retrieve the list of plugins
   - do:
@@ -7,4 +7,4 @@
         h: component
 
   - match:
-      $body: /^custom-settings\n$/
+      $body: /^conflict\n$/

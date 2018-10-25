@@ -1,9 +1,9 @@
 package org.elasticsearch.index.conflict;
 
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+
+import static org.elasticsearch.index.conflict.IndexField.NOTIFICATION_TYPE;
 
 /**
  * An Event represents a log entry. Unless specified explicitly, fields in this class are extracted
@@ -17,6 +17,7 @@ public class Event implements Serializable {
 
     protected String customerID = "-1";
     protected Map<String,Object> fieldGroups = new HashMap<>(2); // Set by Parser
+    protected String[] notifications = new String[NotificationKey.values().length];
 
 
     public Event() {
@@ -183,5 +184,43 @@ public class Event implements Serializable {
 
     public String getCustomerID() {
         return customerID;
+    }
+
+    public String getNotification(NotificationKey key) {
+        // to catch any serialization/deserialization issues with increased array size
+        if (key.ordinal() >= notifications.length){
+            return null;
+        }
+        return notifications[key.ordinal()];
+    }
+
+    public void setNotification(NotificationKey key, String message) {
+        if (key.ordinal() >= notifications.length) {
+            notifications = Arrays.copyOf(notifications, key.ordinal() + 1);
+        }
+        notifications[key.ordinal()] = message;
+    }
+
+    public void applyNotifications() {
+        List<Map<String, ?>> notifications = (List<Map<String, ?>>) getFieldGroups().get(IndexField.LOGGLY_NOTIFICATIONS.name);
+        if(notifications == null){
+            notifications = new LinkedList<>();
+            fieldGroups.put(IndexField.LOGGLY_NOTIFICATIONS.name, notifications);
+        }
+        for (NotificationKey n: NotificationKey.values()) {
+            String msg = getNotification(n);
+            if (msg != null && !msg.isEmpty()) {
+                Map<String, String> notificationObject = new HashMap<>();
+                notificationObject.put(NOTIFICATION_TYPE.name, n.name());
+                notificationObject.put(IndexField.NOTIFICATION_MESSAGE.name, msg);
+                notifications.add(notificationObject);
+                // Only facet notification type
+                MappingConflictUtils.addFieldToFacets(this, IndexField.NOTIFICATION_TYPE.name);
+            }
+        }
+
+
+
+
     }
 }

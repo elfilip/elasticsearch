@@ -1,0 +1,11 @@
+"Test conflict":
+
+  # Reset the settings to their default values
+  - do:
+      cluster.put_settings:
+        body:
+          transient:
+            custom:
+              return:
+                conflict:
+                  ids: true

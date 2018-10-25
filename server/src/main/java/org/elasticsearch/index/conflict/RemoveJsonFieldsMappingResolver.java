@@ -57,8 +57,10 @@ public class RemoveJsonFieldsMappingResolver implements MappingConflictResolver 
   private Event resolve(Event originalEvent) {
     if(!originalEvent.containsFieldGroup(originalEvent.getCustomerID())){
         MappingConflictUtils.removeAllButSyslogFields(originalEvent);
+        originalEvent.setNotification(NotificationKey.MappingConflict, notificationMessage + " Removed all fields.");
     }else{
         originalEvent.removeFieldGroup(originalEvent.getCustomerID());
+        originalEvent.setNotification(NotificationKey.MappingConflict, notificationMessage + " Removed all " + FieldGroups.JSON.name + " fields.");
     }
     MappingConflictUtils.removeFieldFromFacets(originalEvent, FieldGroups.JSON.getName());
     return originalEvent;

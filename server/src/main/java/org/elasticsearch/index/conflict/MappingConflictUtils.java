@@ -17,7 +17,7 @@ public class MappingConflictUtils {
   private final static String FIELD_GROUP_CONTAINING_FIELD = "field_group_containing_field";
   private final static List<String> IGNORE_GROUPS = Arrays.asList(new String[]{"tag", "logtype", "LogglyNotifications",
       "_fnames","_rects","_recseq","_refts","_idxts","_custid","_senderip","_logmsg","_unparsed",
-      "_unparsedmsg","_logsize","_sample","_parser", "syslog"});
+      "_unparsedmsg","_logsize","_sample","_parser", "syslog", "_costbytes", "_id", "_loghdr", "_parsesize", "_source"});
 
   // Different types of mapping conflict resolvers go here, i.e. mapping conflicts containing no fields or mapping conflicts
   // containing a type and a field, resolves that rename fields, etc.
@@ -124,6 +124,20 @@ public class MappingConflictUtils {
 
     public static void removeFieldFromFacets(Event originalEvent, String name){
       removeFieldFromFacetsCond(originalEvent, name, true);
+    }
+
+    public static void addFieldToFacets(Event originalEvent, String name) {
+        Map<String, List<?>> fnames = (Map<String, List<?>>) originalEvent.getFieldGroups().get("_fnames");
+        if(fnames != null){
+            List<String> facet = (List<String>)fnames.get(IndexField.FACET_FIELDS.name);
+            if (facet == null) {
+                facet = new LinkedList<>();
+                fnames.put(IndexField.FACET_FIELDS.name, facet);
+            }
+            if(!facet.contains(name)){
+                facet.add(name);
+            }
+        }
     }
 
 

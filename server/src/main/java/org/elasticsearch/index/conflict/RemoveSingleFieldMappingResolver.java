@@ -84,6 +84,7 @@ public class RemoveSingleFieldMappingResolver implements MappingConflictResolver
               fieldGroup = originalEvent.getFieldGroup(originalEvent.customerID);
               if(fieldGroup == null){
                   MappingConflictUtils.removeAllButSyslogFields(originalEvent);
+                  originalEvent.setNotification(NotificationKey.MappingConflict, notificationMessage + " Removed all fields.");
               }
           }else{
               fieldGroup = originalEvent.getFieldGroup(this.fieldGroupToSearch);
@@ -91,11 +92,13 @@ public class RemoveSingleFieldMappingResolver implements MappingConflictResolver
 
         Object removedValue = searchAndRemoveField(originalEvent, fieldGroup, fieldCausingConflict, new LinkedList<>());
         if(removedValue != null) {
+          originalEvent.setNotification(NotificationKey.MappingConflict, notificationMessage + " Removed the field causing the conflict: " + fieldCausingConflict);
           return originalEvent;
         }
         else {
           // we weren't able to find and remove the conflicting field so remove all fields for the field group we're searching within
           originalEvent.removeFieldGroup(this.fieldGroupToSearch);
+          originalEvent.setNotification(NotificationKey.MappingConflict, notificationMessage + " Removed all " + this.fieldGroupToSearch + " fields.");
           return originalEvent;
         }
       }
@@ -116,7 +119,9 @@ public class RemoveSingleFieldMappingResolver implements MappingConflictResolver
     if (removedField != null) {
       int firstDot = fieldCausingConflict.indexOf(".");
       if(firstDot != -1){
-          MappingConflictUtils.removeFieldFromFacets(originalEvent, fieldCausingConflict.substring(firstDot + 1, fieldCausingConflict.length()));
+          String field = fieldCausingConflict.substring(firstDot + 1, fieldCausingConflict.length());
+          MappingConflictUtils.removeFieldFromFacets(originalEvent, field);
+          originalEvent.setNotification(NotificationKey.MappingConflict, notificationMessage + " Removed field causing conflict: " + field);
       }
       return;
     } else {
@@ -124,12 +129,14 @@ public class RemoveSingleFieldMappingResolver implements MappingConflictResolver
       String fieldGroupName = fieldCausingConflict.split("\\.")[0];
       if(originalEvent.containsFieldGroup(fieldGroupName)) {
         originalEvent.removeFieldGroup(fieldGroupName);
+        originalEvent.setNotification(NotificationKey.MappingConflict, notificationMessage + " Removed all " + fieldGroupName + " fields.");
         return;
       }
     }
 
     // If we didn't find a field or field group to remove, just remove everything except for syslog
     MappingConflictUtils.removeAllButSyslogFields(originalEvent);
+    originalEvent.setNotification(NotificationKey.MappingConflict, notificationMessage + " Removed all fields.");
   }
 
   /**

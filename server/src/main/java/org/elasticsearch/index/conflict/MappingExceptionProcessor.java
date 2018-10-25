@@ -9,7 +9,9 @@ public class MappingExceptionProcessor implements FailedEventProcessor {
   @Override
   public Event process(FailedEvent fe) {
     if (fe.getFailureReason().contains("MapperParsingException")) {
-      return filterMappingErrors(fe.getOriginalEvent(), fe.getFailureReason());
+        Event fixedEvent = filterMappingErrors(fe.getOriginalEvent(), fe.getFailureReason());
+        fixedEvent.applyNotifications();
+        return fixedEvent;
     }
 
     return fe.getOriginalEvent();
@@ -26,6 +28,7 @@ public class MappingExceptionProcessor implements FailedEventProcessor {
 
     if(resolvedEvent == null) {
       MappingConflictUtils.removeAllButSyslogFields(originalEvent);
+      originalEvent.setNotification(NotificationKey.MappingConflict, "Encountered mapping conflict while attempting to index event and was unable to resolve the conflict. Removed all fields.");
     }
 
     return originalEvent;

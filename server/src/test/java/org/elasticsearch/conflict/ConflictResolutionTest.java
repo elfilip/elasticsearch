@@ -2,9 +2,7 @@ package org.elasticsearch.conflict;
 
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.conflict.Event;
-import org.elasticsearch.index.conflict.FailedEvent;
-import org.elasticsearch.index.conflict.MappingExceptionProcessor;
+import org.elasticsearch.index.conflict.*;
 import org.elasticsearch.test.ESTestCase;
 import org.junit.Before;
 
@@ -24,6 +22,9 @@ public class ConflictResolutionTest extends ESTestCase {
         FailedEvent fe = new FailedEvent(EVENT, "MapperParsingException[failed to parse [12345.json.field1]]; nested: IllegalStateException[Can't get text on a START_OBJECT at 1:5699]");
         mappingExceptionProcessor.process(fe);
         assertThat(checkIfPathExists(fe.getOriginalEvent().getFieldGroups(), "12345.json.field1"), equalTo(false));
+        assertThat(checkIfNotificationExists(fe.getOriginalEvent().getFieldGroups(),
+            NotificationKey.MappingConflict.name(),
+            "Field originally sent as one type and later sent as new type. Removed field causing conflict: json.field1"), equalTo(true));
         assertThat(checkIfFacetExists(fe.getOriginalEvent().getFieldGroups(), "facet", "json.field1"), equalTo(false));
         assertThat(checkIfFacetExists(fe.getOriginalEvent().getFieldGroups(), "numeric", "json.field1"), equalTo(false));
     }
@@ -34,6 +35,10 @@ public class ConflictResolutionTest extends ESTestCase {
         assertThat(checkIfPathExists(fe.getOriginalEvent().getFieldGroups(), "12345.json.inner1"), equalTo(false));
         assertThat(checkIfPathExists(fe.getOriginalEvent().getFieldGroups(), "12345.json.field1"), equalTo(true));
         assertThat(checkIfFacetExists(fe.getOriginalEvent().getFieldGroups(), "facet", "json.inner1.latitude"), equalTo(false));
+        assertThat(checkIfNotificationExists(fe.getOriginalEvent().getFieldGroups(),
+            NotificationKey.MappingConflict.name(),
+            "Field originally sent as an object and later sent as a concrete value. Removed the field causing the conflict: inner1"), equalTo(true));
+
     }
 
     public void testRemoveSingleUnqualified() {
@@ -64,7 +69,7 @@ public class ConflictResolutionTest extends ESTestCase {
         assertThat(checkIfFacetExists(fe.getOriginalEvent().getFieldGroups(), "facet", "json.field2"), equalTo(true));
     }
 
-    public void testRemoveJSONX() {
+    public void testRemoveJSON() {
         FailedEvent fe = new FailedEvent(EVENT, "MapperParsingException[object mapping for [index.name] tried to parse as object, but got EOF, has a concrete value been provided to it?]");
         mappingExceptionProcessor.process(fe);
         assertThat(checkIfPathExists(fe.getOriginalEvent().getFieldGroups(), "12345.json.field1"), equalTo(false));
@@ -75,6 +80,10 @@ public class ConflictResolutionTest extends ESTestCase {
         assertThat(checkIfFacetExists(fe.getOriginalEvent().getFieldGroups(), "facet", "json.field2"), equalTo(false));
         assertThat(checkIfFacetExists(fe.getOriginalEvent().getFieldGroups(), "facet", "json.inner1"), equalTo(false));
         assertThat(checkIfFacetExists(fe.getOriginalEvent().getFieldGroups(), "facet", "json.field3"), equalTo(false));
+        assertThat(checkIfNotificationExists(fe.getOriginalEvent().getFieldGroups(),
+            NotificationKey.MappingConflict.name(),
+            "Field originally sent as an object and later as a concrete value or an array. Removed all json fields."), equalTo(true));
+
     }
 
     public void testRemoveAllButSyslog() {
@@ -127,6 +136,18 @@ public class ConflictResolutionTest extends ESTestCase {
             return false;
         }
         return names.contains(name);
+    }
+
+    private boolean checkIfNotificationExists(Map<String, Object> root, String typeValue, String messageValue) {
+        List<Map<String, Object>> notifications = (List<Map<String, Object>> )root.get(IndexField.LOGGLY_NOTIFICATIONS.name);
+        for(Map<String, Object> notification : notifications){
+            String type = (String) notification.get(IndexField.NOTIFICATION_TYPE.name);
+            String message = (String) notification.get(IndexField.NOTIFICATION_MESSAGE.name);
+            if (type != null && type.equals(typeValue) && message != null && message.equals(messageValue)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 

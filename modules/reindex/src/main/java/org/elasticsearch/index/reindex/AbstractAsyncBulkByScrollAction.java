@@ -399,7 +399,8 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
                     Failure failure = it.next();
                     if(failure.getStatus().equals(RestStatus.BAD_REQUEST)){
                         worker.countConflicts();
-                        worker.addError(failure.getId());
+                        if(clusterState.getMetaData().transientSettings().getAsBoolean("custom.return.conflict.ids",false))
+                            worker.addError(failure.getId());
                         it.remove();
                     }
                 }
